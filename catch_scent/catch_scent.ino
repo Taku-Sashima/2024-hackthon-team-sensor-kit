@@ -62,20 +62,13 @@ Bme68x bme;
 
 float last = 0;
 int count = 0;
+int dataAmount = 30;
+bool doGetData = false;
+bool doMakeJson = false;
 
 StaticJsonDocument<2048> smel_json;
 
-/**
- * @brief 取得したデータの一時格納場所、2次元配列
- */
-char data_list[7][120];
-// char gas_index[120];
-// char millis_data[120];
-// char temperature_data[120];
-// char humidity_data[120];
-// char pressure_data[120];
-// char gas_value[120];
-// char diff_gas_value[120];
+
 
 // センサーデータの型に合わせた変数を定義する
 int gas_index[120];
@@ -91,7 +84,7 @@ float diff_gas_value[120];
 /**
  * @brief データをとって、2次元配列に入れる関数
  */
-void get_data()
+void get_data(void)
 {
   bme68xData data;
   uint8_t nFieldsLeft = 0;
@@ -108,30 +101,20 @@ void get_data()
       {
         float current = log(data.gas_resistance); // 値の変動が大きいので対数をとるといい感じです
 
-        // Serial.print(String(data.gas_index)+",");
-        // Serial.print(String(millis()) + ",");
-        // Serial.print(String(data.temperature) + ","); // 周囲の温度湿度も結構影響があります
-        // Serial.print(String(data.humidity) + ",");
-        // Serial.print(String(data.pressure) + ",");        
-        // Serial.print(String(current,3)+",");
-        // Serial.print(String(current-last+10,3)+",");  // ガスの脱着は温度変化に敏感なので差分もつかうと良いです
-        // Serial.println("");
-
         gas_index[count]=data.gas_index;
         millis_data[count]=millis();
         temperature_data[count]=data.temperature;
         humidity_data[count]=data.humidity;
         pressure_data[count]=data.pressure;
-        gas_value[count]=(current,3);
-        diff_gas_value[count]=(current-last+10,3);
+        gas_value[count]=current;
+        diff_gas_value[count]=current-last+10;
 
-        // Serial.print(count);
-        Serial.print(String(gas_index[count]));
-        Serial.print(String(millis_data[count]));
-        Serial.print(String(temperature_data[count]));
-        Serial.print(String(humidity_data[count]));
-        Serial.print(String(pressure_data[count]));
-        Serial.print(String(gas_value[count]));
+        Serial.print(String(gas_index[count])+",");
+        Serial.print(String(millis_data[count])+",");
+        Serial.print(String(temperature_data[count])+",");
+        Serial.print(String(humidity_data[count])+",");
+        Serial.print(String(pressure_data[count])+",");
+        Serial.print(String(gas_value[count])+",");
         Serial.println(String(diff_gas_value[count]));
         count ++;
 
@@ -140,13 +123,19 @@ void get_data()
       }
     } while (nFieldsLeft);
   }
+  
+  if(count == dataAmount+10){
+    doGetData = false;
+    doMakeJson = true;
+  }
+
 }
 
 
 /**
  * @brief JAONを作る関数
  */
-void create_json()
+void create_json(void)
 {
   int first_index = 0;
 
@@ -154,53 +143,41 @@ void create_json()
     if(gas_index[i] == 0){
       first_index = i;
       break;
-    }else{
-      continue;
     }
   }
+  Serial.println("first_index_is"+String(first_index));
 
   char* colum[7] = {"id","date","temperature","humidity","pressure","gas_value","diff_gas_value"};
 
-/**
-* @brief jason配列を作る
-*/
-  for(int i=0; i<7; i++){
-    JsonArray data = smel_json.createNestedArray(colum[i]);
-  }
+  JsonArray id = smel_json.createNestedArray(colum[0]);
+  JsonArray date = smel_json.createNestedArray(colum[1]);
+  JsonArray temperature = smel_json.createNestedArray(colum[2]);
+  JsonArray humidity = smel_json.createNestedArray(colum[3]);
+  JsonArray pressure = smel_json.createNestedArray(colum[4]);
+  JsonArray gas_value_array = smel_json.createNestedArray(colum[5]);
+  JsonArray diff_gas_value_array = smel_json.createNestedArray(colum[6]);
 
-  for(int i=0; i<100; i++){
-    int k = first_index + i;
-    smel_json[0].add(String(gas_index[k]));
-  }
-  for(int i=0; i<100; i++){
-    int k = first_index + i;
-    smel_json[1].add(String(millis_data[k]));
-  }
-  for(int i=0; i<100; i++){
-    int k = first_index + i;
-    smel_json[2].add(String(temperature_data[k]));
-  }
-  for(int i=0; i<100; i++){
-    int k = first_index + i;
-    smel_json[3].add(String(humidity_data[k]));
-  }
-  for(int i=0; i<100; i++){
-    int k = first_index + i;
-    smel_json[4].add(String(pressure_data[k]));
-  }
-  for(int i=0; i<100; i++){
-    int k = first_index + i;
-    smel_json[5].add(String(gas_value[k]));
-  }
-  for(int i=0; i<100; i++){
-    int k = first_index + i;
-    smel_json[6].add(String(diff_gas_value[k]));
-  }
 
+  for(int i=0; i<dataAmount; i++){
+    int k = first_index + i;
+
+    id.add(String(gas_index[k]));
+    date.add(String(millis_data[k]));
+    temperature.add(String(temperature_data[k]));
+    humidity.add(String(humidity_data[k]));
+    pressure.add(String(pressure_data[k]));
+    gas_value_array.add(String(gas_value[k]));
+    diff_gas_value_array.add(String(diff_gas_value[k]));
+
+    // Serial.println(smel_json["gas_value"][k].as<float>());
+    // Serial.println(smel_json["diff_gas_value"][k].as<float>());
+    Serial.println("_______________");
+
+  }
+  count=0;
+  doMakeJson = false;
+  M5.update();
 }
-
-
-
 
 
 
@@ -273,16 +250,30 @@ void setup(void)
 
 
 
-
+/**
+ * @brief Initializes the sensor and hardware settings
+ */
 void loop(void)
 {
-  //ボタンを押したら起動する,contが115になったらfalsez→リセット
-  if (true){
-    get_data();
+  //M5の中央ボタンを押したらtrueになる
+  if ( M5.BtnA.wasPressed() ) {
+    doGetData = M5.BtnA.wasPressed();
+  }else{
+    M5.update();
   }
 
-  if (count == 115){
+  //ボタンを押したら起動する,countが30になったらfalse→リセット
+  if (doGetData){
+    get_data();
+    Serial.println(count);
+  }
+
+  if (doMakeJson){
     create_json();
+
+    Serial.println(String(smel_json["date"][5].as<String>()));
+    Serial.println(smel_json["gas_value"][5].as<float>());
+    Serial.println(smel_json["diff_gas_value"][5].as<float>());
 
     if (wifiMulti.run() == WL_CONNECTED){
 
@@ -295,8 +286,9 @@ void loop(void)
 
       char output[2048]; 
       serializeJson(smel_json, output);
+      Serial.println(output);
 
-      int httpCode = httpClient.POST(output);
+      int httpCode = httpClient.POST((uint8_t*)output, strlen(output));
 
       if (httpCode == 200) {
           String response = httpClient.getString();
@@ -309,12 +301,7 @@ void loop(void)
       httpClient.end();
     }
     delay(5000);
-
   }
   
-
-  
-
 }
-
 
