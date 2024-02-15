@@ -19,16 +19,21 @@
 //M5とsensorのラオブラリ
 // #include "M5Atom.h"
 #include <M5StickCPlus.h>
-#include "bme68xLibrary.h"
 #include <HTTPClient.h>
+#include <math.h>
+#include "bme68xLibrary.h"
+Bme68x bme;
+
+#include <M5GFX.h>// M5GFXライブラリのインクルード
+M5GFX lcd; 
+M5Canvas canvas(&lcd);
+
 
 //Wifi系
 #include <WiFi.h>
 #include <WiFiMulti.h>
 #include <WiFiUDP.h>
 //同じ階層に　WifiSecret.h　ファイルを作る
-
-
 
 
 
@@ -45,8 +50,44 @@
 
 #define BME688_I2C_ADDR 0x76
 
-#include <math.h>
-Bme68x bme;
+bool doGetData =false;
+
+float last = 0;
+
+
+void harvest_data(void){
+  bme68xData data;
+  uint8_t nFieldsLeft = 0;
+
+  /* data being fetched for every 140ms */
+  delay(MEAS_DUR);
+
+  if (bme.fetchData())
+  {
+    do
+    {
+      nFieldsLeft = bme.getData(data);
+      if (data.status == NEW_GAS_MEAS)
+      {
+        //M5の画面に計測中の文字を表示
+        float current = log(data.gas_resistance); // 値の変動が大きいので対数をとるといい感じです
+
+        Serial.print(String(data.gas_index)+",");
+        Serial.print(String(millis()) + ",");
+        Serial.print(String(data.temperature) + ","); // 周囲の温度湿度も結構影響があります
+        Serial.print(String(data.humidity) + ",");
+        Serial.print(String(data.pressure) + ",");        
+        Serial.print(String(current,3)+",");
+        Serial.print(String(current-last+10,3)+",");  // ガスの脱着は温度変化に敏感なので差分もつかうと良いです
+        Serial.println("");
+
+
+        last = current;
+        delay(20);
+      }
+    } while (nFieldsLeft);
+  }
+}
 
 
 /**
@@ -59,9 +100,13 @@ void setup(void)
   delay(50);
 
   M5.Axp.ScreenBreath(34);
-  M5.Lcd.setTextSize(2);
+  M5.Lcd.setTextSize(3);
   M5.IMU.Init();
-    
+
+  lcd.begin();
+  canvas.createSprite(lcd.width(), lcd.height()/2);
+  canvas.setTextColor(WHITE); 
+  canvas.setFont(&fonts::lgfxJapanGothic_40);
   
   Wire.begin(SDA_PIN, SCL_PIN);
 
@@ -101,42 +146,26 @@ void setup(void)
 }
 
 
-
-float last = 0;
-
-
 void loop(void)
 {
-  bme68xData data;
-  uint8_t nFieldsLeft = 0;
-
-  /* data being fetched for every 140ms */
-  delay(MEAS_DUR);
-
-
-  if (bme.fetchData())
-  {
-    do
-    {
-      nFieldsLeft = bme.getData(data);
-      if (data.status == NEW_GAS_MEAS)
-      {
-        //M5の画面に計測中の文字を表示
-        float current = log(data.gas_resistance); // 値の変動が大きいので対数をとるといい感じです
-
-        Serial.print(String(data.gas_index)+",");
-        Serial.print(String(millis()) + ",");
-        Serial.print(String(data.temperature) + ","); // 周囲の温度湿度も結構影響があります
-        Serial.print(String(data.humidity) + ",");
-        Serial.print(String(data.pressure) + ",");        
-        Serial.print(String(current,3)+",");
-        Serial.print(String(current-last+10,3)+",");  // ガスの脱着は温度変化に敏感なので差分もつかうと良いです
-        Serial.println("");
-
-
-        last = current;
-        delay(20);
-      }
-    } while (nFieldsLeft);
+  //M5の中央ボタンを押したらtrueになる
+  if ( M5.BtnA.wasPressed() ) {
+    doGetData = M5.BtnA.wasPressed();
+  }else{
+    M5.update();
   }
+
+  canvas.fillRect(0, 0, lcd.width(), 120, BLACK);
+  if (doGetData){
+    harvest_data();
+    
+    canvas.println("データ取得中");
+  }else{
+    canvas.println("待機中");
+  }
+
+  
+  canvas.setCursor(0, 0);
+  canvas.pushSprite(&lcd, 0, lcd.height()/2);
+
 }
