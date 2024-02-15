@@ -16,14 +16,25 @@
 //   https://twitter.com/ksasao/status/1479108937861709825
 
 
+/**
+ * @brief ipアドレスとポート番号を自身のものに変更する必要があります
+ */
+
+
 //M5とsensorのラオブラリ
 // #include "M5Atom.h"
 #include <Arduino.h>
 #include <M5StickCPlus.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>  
+#include <math.h>
 
 #include "bme68xLibrary.h"
+Bme68x bme;
+
+#include <M5GFX.h>// M5GFXライブラリのインクルード
+M5GFX lcd; 
+M5Canvas canvas(&lcd);
 
 //Wifi系
 #include <WiFi.h>
@@ -57,8 +68,7 @@ const char *pc_port = pc_port_secret; //送信先のポート
 
 #define BME688_I2C_ADDR 0x76
 
-#include <math.h>
-Bme68x bme;
+
 
 float last = 0;
 int count = 0;
@@ -72,17 +82,15 @@ StaticJsonDocument<2048> smel_json;
 
 // センサーデータの型に合わせた変数を定義する
 int gas_index[120];
-unsigned long millis_data[120];
 float temperature_data[120];
 float humidity_data[120];
 float pressure_data[120];
 float gas_value[120];
-float diff_gas_value[120];
 
 
 
 /**
- * @brief データをとって、2次元配列に入れる関数
+ * @brief データをとって、それぞれの配列に入れる関数
  */
 void get_data(void)
 {
@@ -102,20 +110,16 @@ void get_data(void)
         float current = log(data.gas_resistance); // 値の変動が大きいので対数をとるといい感じです
 
         gas_index[count]=data.gas_index;
-        millis_data[count]=millis();
         temperature_data[count]=data.temperature;
         humidity_data[count]=data.humidity;
         pressure_data[count]=data.pressure;
         gas_value[count]=current;
-        diff_gas_value[count]=current-last+10;
 
         Serial.print(String(gas_index[count])+",");
-        Serial.print(String(millis_data[count])+",");
         Serial.print(String(temperature_data[count])+",");
         Serial.print(String(humidity_data[count])+",");
         Serial.print(String(pressure_data[count])+",");
         Serial.print(String(gas_value[count])+",");
-        Serial.println(String(diff_gas_value[count]));
         count ++;
 
         last = current;
@@ -147,32 +151,26 @@ void create_json(void)
   }
   Serial.println("first_index_is"+String(first_index));
 
-  char* colum[7] = {"id","date","temperature","humidity","pressure","gas_value","diff_gas_value"};
+  char* colum[6] = {"index","temperature","humidity","pressure","gas_value"};
 
-  JsonArray id = smel_json.createNestedArray(colum[0]);
-  JsonArray date = smel_json.createNestedArray(colum[1]);
+  JsonArray index = smel_json.createNestedArray(colum[0]);
   JsonArray temperature = smel_json.createNestedArray(colum[2]);
   JsonArray humidity = smel_json.createNestedArray(colum[3]);
   JsonArray pressure = smel_json.createNestedArray(colum[4]);
   JsonArray gas_value_array = smel_json.createNestedArray(colum[5]);
-  JsonArray diff_gas_value_array = smel_json.createNestedArray(colum[6]);
+
 
 
   for(int i=0; i<dataAmount; i++){
     int k = first_index + i;
 
-    id.add(String(gas_index[k]));
-    date.add(String(millis_data[k]));
+    index.add(String(gas_index[k]));
     temperature.add(String(temperature_data[k]));
     humidity.add(String(humidity_data[k]));
     pressure.add(String(pressure_data[k]));
     gas_value_array.add(String(gas_value[k]));
-    diff_gas_value_array.add(String(diff_gas_value[k]));
 
-    // Serial.println(smel_json["gas_value"][k].as<float>());
-    // Serial.println(smel_json["diff_gas_value"][k].as<float>());
     Serial.println("_______________");
-
   }
   count=0;
   doMakeJson = false;
@@ -266,6 +264,7 @@ void loop(void)
   if (doGetData){
     get_data();
     Serial.println(count);
+    M5.Lcd.println("Now getting the data");
   }
 
   if (doMakeJson){
@@ -273,7 +272,6 @@ void loop(void)
 
     Serial.println(String(smel_json["date"][5].as<String>()));
     Serial.println(smel_json["gas_value"][5].as<float>());
-    Serial.println(smel_json["diff_gas_value"][5].as<float>());
 
     if (wifiMulti.run() == WL_CONNECTED){
 
