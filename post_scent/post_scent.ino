@@ -52,7 +52,7 @@ const char *pass = pass_secret; // WiFiのパスワードを入力
 
 const char *pc_addr = pc_addr_secret;  
 const char *pc_port = pc_port_secret; //送信先のポート
-// const int my_port = 50008;  //M5自身のポート
+const char *pc_endpoint = pc_endpoint_secret; //送信先のエンドポイント
 
 
 #define NEW_GAS_MEAS (BME68X_GASM_VALID_MSK | BME68X_HEAT_STAB_MSK | BME68X_NEW_DATA_MSK)
@@ -180,7 +180,7 @@ void postReq(void){
   if (wifiMulti.run() == WL_CONNECTED){
 
     char url[1024] = {0};
-    sprintf(url, "http://%s:%s/m5_data_post",pc_addr_secret,pc_port);
+    sprintf(url, "http://%s:%s%s",pc_addr,pc_port,pc_endpoint);
 
     httpClient.begin(url);
     httpClient.addHeader("Content-Type", "application/json; charset=ascii");
@@ -297,15 +297,16 @@ void loop(void)
     if (count%7<3){
       canvas.fillRect(0, 0, lcd.width(), lcd.height(), lcd.color565(0, 147,  214));
       canvas.drawCentreString("クンクン", lcd.width()/2, lcd.height()/2-16); 
-      canvas.drawCentreString("...", lcd.width()/2, lcd.height()/2+16); 
-      canvas.pushSprite(&lcd, 0, 0);
     }else{
       canvas.fillRect(0, 0, lcd.width(), lcd.height(), lcd.color565(0, 147,  214));
       canvas.drawCentreString("香りを", lcd.width()/2, lcd.height()/2-32); 
       canvas.drawCentreString("嗅いでる", lcd.width()/2, lcd.height()/2); 
       canvas.drawCentreString("ゾウ！", lcd.width()/2, lcd.height()/2+32); 
-      canvas.pushSprite(&lcd, 0, 0);
     }
+    canvas.drawString("0", 5, lcd.height()/2+64,2); 
+    canvas.drawString("100(%)",lcd.width()-45, lcd.height()/2+64,2); 
+    canvas.fillRect(5,lcd.height()/2+82,(lcd.width()-10)*count/(dataAmount+10),20,lcd.color565(255, 255,  255));
+    canvas.pushSprite(&lcd, 0, 0);
   }else{
     canvas.fillRect(0, 0, lcd.width(), lcd.height(), lcd.color565(0, 147,  214));
     canvas.drawCentreString("香りを", lcd.width()/2, lcd.height()/2-32); 
