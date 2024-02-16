@@ -69,8 +69,6 @@ const char *pc_port = pc_port_secret; //送信先のポート
 #define BME688_I2C_ADDR 0x76
 
 
-
-float last = 0;
 int count = 0;
 int dataAmount = 30;
 bool doGetData = false;
@@ -119,10 +117,9 @@ void get_data(void)
         Serial.print(String(temperature_data[count])+",");
         Serial.print(String(humidity_data[count])+",");
         Serial.print(String(pressure_data[count])+",");
-        Serial.print(String(gas_value[count])+",");
-        count ++;
+        Serial.println(String(gas_value[count])+",");
 
-        last = current;
+        count ++;
         delay(20);
       }
     } while (nFieldsLeft);
@@ -151,13 +148,13 @@ void create_json(void)
   }
   Serial.println("first_index_is"+String(first_index));
 
-  char* colum[6] = {"index","temperature","humidity","pressure","gas_value"};
+  char* colum[5] = {"index","temperature","humidity","pressure","gas_value"};
 
   JsonArray index = smel_json.createNestedArray(colum[0]);
-  JsonArray temperature = smel_json.createNestedArray(colum[2]);
-  JsonArray humidity = smel_json.createNestedArray(colum[3]);
-  JsonArray pressure = smel_json.createNestedArray(colum[4]);
-  JsonArray gas_value_array = smel_json.createNestedArray(colum[5]);
+  JsonArray temperature = smel_json.createNestedArray(colum[1]);
+  JsonArray humidity = smel_json.createNestedArray(colum[2]);
+  JsonArray pressure = smel_json.createNestedArray(colum[3]);
+  JsonArray gas_value_array = smel_json.createNestedArray(colum[4]);
 
 
 
@@ -177,6 +174,45 @@ void create_json(void)
   M5.update();
 }
 
+void postReq(void){
+  create_json();
+
+  if (wifiMulti.run() == WL_CONNECTED){
+
+    char url[1024] = {0};
+    sprintf(url, "http://%s:%s/m5_data_post",pc_addr_secret,pc_port);
+
+    httpClient.begin(url);
+    httpClient.addHeader("Content-Type", "application/json; charset=ascii");
+
+    char output[2048]; 
+    serializeJson(smel_json, output);
+    Serial.println(output);
+
+    int httpCode = httpClient.POST((uint8_t*)output, strlen(output));
+
+    if (httpCode == 200) {
+        String response = httpClient.getString();
+        Serial.printf("[HTTP RESPONSE]: %s", response);
+    } else {
+        Serial.printf("[HTTP ERR CODE]: %d", httpCode);
+        String response = httpClient.getString();
+        Serial.printf("[HTTP RESPONSE]: %s\n", response);
+    }
+    httpClient.end();
+  }
+  unsigned long millis_pre = millis();
+  while(millis() - millis_pre < 5000){
+    canvas.fillRect(0, 0, lcd.width(), lcd.height(), lcd.color565(0, 147,  214));
+    canvas.drawCentreString("香りを", lcd.width()/2, lcd.height()/2-32);
+    canvas.drawCentreString("嗅ぎおえた", lcd.width()/2, lcd.height()/2); 
+    canvas.drawCentreString("ゾウ！", lcd.width()/2, lcd.height()/2+32); 
+    canvas.pushSprite(&lcd, 0, 0);
+  }
+}
+
+
+
 
 
 /**
@@ -188,23 +224,21 @@ void setup(void)
   M5.begin();
   delay(50);
 
+  //ディスプレイの初期化と設定
+  lcd.begin();
   M5.Axp.ScreenBreath(34);
-  M5.Lcd.setTextSize(2);
-  M5.IMU.Init();
+  canvas.createSprite(lcd.width(), lcd.height());
+  canvas.setColorDepth(8);
+  canvas.setTextColor(WHITE); 
+  canvas.setFont(&fonts::lgfxJapanGothic_28);
+  canvas.setCursor(lcd.width()/2, 0);
+
+  lcd.setTextDatum(middle_left);
 
   //wifiに接続
   wifiMulti.addAP(ssid, pass);
-  M5.Lcd.print("Waiting for WiFi to");
-  M5.Lcd.print(ssid); 
   while(wifiMulti.run() != WL_CONNECTED) {
-    M5.Lcd.print("."); 
   }
-
-  //ディスプレイに表示
-  M5.Lcd.println("WiFi connected");
-  M5.Lcd.print("IP address = ");
-  M5.Lcd.println(WiFi.localIP());
-    
   
   Wire.begin(SDA_PIN, SCL_PIN);
 
@@ -241,15 +275,12 @@ void setup(void)
 
   bme.setHeaterProf(tempProf, mulProf, sharedHeatrDur, 10);
   bme.setOpMode(BME68X_PARALLEL_MODE);
-
 }
 
 
 
-
-
 /**
- * @brief Initializes the sensor and hardware settings
+ * @brief main loop function
  */
 void loop(void)
 {
@@ -263,43 +294,28 @@ void loop(void)
   //ボタンを押したら起動する,countが30になったらfalse→リセット
   if (doGetData){
     get_data();
-    Serial.println(count);
-    M5.Lcd.println("Now getting the data");
+    if (count%7<3){
+      canvas.fillRect(0, 0, lcd.width(), lcd.height(), lcd.color565(0, 147,  214));
+      canvas.drawCentreString("クンクン", lcd.width()/2, lcd.height()/2-16); 
+      canvas.drawCentreString("...", lcd.width()/2, lcd.height()/2+16); 
+      canvas.pushSprite(&lcd, 0, 0);
+    }else{
+      canvas.fillRect(0, 0, lcd.width(), lcd.height(), lcd.color565(0, 147,  214));
+      canvas.drawCentreString("香りを", lcd.width()/2, lcd.height()/2-32); 
+      canvas.drawCentreString("嗅いでる", lcd.width()/2, lcd.height()/2); 
+      canvas.drawCentreString("ゾウ！", lcd.width()/2, lcd.height()/2+32); 
+      canvas.pushSprite(&lcd, 0, 0);
+    }
+  }else{
+    canvas.fillRect(0, 0, lcd.width(), lcd.height(), lcd.color565(0, 147,  214));
+    canvas.drawCentreString("香りを", lcd.width()/2, lcd.height()/2-32); 
+    canvas.drawCentreString("嗅ぎたい", lcd.width()/2, lcd.height()/2); 
+    canvas.drawCentreString("ゾウ！", lcd.width()/2, lcd.height()/2+32); 
+    canvas.pushSprite(&lcd, 0, 0);
   }
 
   if (doMakeJson){
-    create_json();
-
-    Serial.println(String(smel_json["date"][5].as<String>()));
-    Serial.println(smel_json["gas_value"][5].as<float>());
-
-    if (wifiMulti.run() == WL_CONNECTED){
-
-      char url[1024] = {0};
-      sprintf(url, "http://%s:%s/m5_data_post",pc_addr_secret,pc_port);
-
-      httpClient.begin(url);
-      httpClient.addHeader("Content-Type", "application/json; charset=ascii");
-
-
-      char output[2048]; 
-      serializeJson(smel_json, output);
-      Serial.println(output);
-
-      int httpCode = httpClient.POST((uint8_t*)output, strlen(output));
-
-      if (httpCode == 200) {
-          String response = httpClient.getString();
-          Serial.printf("[HTTP RESPONSE]: %s", response);
-      } else {
-          Serial.printf("[HTTP ERR CODE]: %d", httpCode);
-          String response = httpClient.getString();
-          Serial.printf("[HTTP RESPONSE]: %s\n", response);
-      }
-      httpClient.end();
-    }
-    delay(5000);
+    postReq();
   }
-  
 }
 

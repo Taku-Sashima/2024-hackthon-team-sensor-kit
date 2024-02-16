@@ -99,9 +99,6 @@ void setup(void)
   M5.begin();
   delay(50);
 
-  M5.Axp.ScreenBreath(34);
-  M5.Lcd.setTextSize(3);
-  M5.IMU.Init();
 
   lcd.begin();
   canvas.createSprite(lcd.width(), lcd.height()/2);
