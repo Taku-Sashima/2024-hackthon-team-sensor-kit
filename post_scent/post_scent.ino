@@ -73,6 +73,7 @@ int count = 0;
 int dataAmount = 30;
 bool doGetData = false;
 bool doMakeJson = false;
+bool wasButtonB = false;
 
 StaticJsonDocument<2048> smel_json;
 
@@ -129,6 +130,11 @@ void get_data(void)
     doGetData = false;
     doMakeJson = true;
   }
+  if(M5.BtnB.wasPressed()){
+    doGetData = false;
+    doMakeJson = false;
+    M5.update();
+  }
 
 }
 
@@ -174,11 +180,13 @@ void create_json(void)
   M5.update();
 }
 
+
 void postReq(void){
   create_json();
+  String response;
+  int scent_id;
 
   if (wifiMulti.run() == WL_CONNECTED){
-
     char url[1024] = {0};
     sprintf(url, "http://%s:%s%s",pc_addr,pc_port,pc_endpoint);
 
@@ -192,16 +200,28 @@ void postReq(void){
     int httpCode = httpClient.POST((uint8_t*)output, strlen(output));
 
     if (httpCode == 200) {
-        String response = httpClient.getString();
+        response = httpClient.getString();
         Serial.printf("[HTTP RESPONSE]: %s", response);
     } else {
         Serial.printf("[HTTP ERR CODE]: %d", httpCode);
-        String response = httpClient.getString();
+        response = httpClient.getString();
         Serial.printf("[HTTP RESPONSE]: %s\n", response);
     }
     httpClient.end();
   }
   unsigned long millis_pre = millis();
+
+  if (!response.isEmpty()) {
+    DynamicJsonDocument doc(1024);
+    DeserializationError error = deserializeJson(doc, response);
+    if (!error) {
+      scent_id = doc["scent_id"];
+    } else {
+      Serial.print("deserializeJson() failed: ");
+      Serial.println(error.c_str());
+    }
+  }
+
   while(millis() - millis_pre < 5000){
     canvas.fillRect(0, 0, lcd.width(), lcd.height(), lcd.color565(0, 147,  214));
     canvas.drawCentreString("香りを", lcd.width()/2, lcd.height()/2-32);
@@ -209,9 +229,15 @@ void postReq(void){
     canvas.drawCentreString("ゾウ！", lcd.width()/2, lcd.height()/2+32); 
     canvas.pushSprite(&lcd, 0, 0);
   }
+  while(M5.BtnB.wasPressed()==false){
+    doGetData = false;
+    doMakeJson = false;
+    M5.update();
+    canvas.fillRect(0, 0, lcd.width(), lcd.height(), lcd.color565(0, 147,  214));
+    canvas.drawCentreString(String(scent_id).c_str(), lcd.width()/2, lcd.height()/2);
+    canvas.pushSprite(&lcd, 0, 0);
+  }
 }
-
-
 
 
 
@@ -229,7 +255,7 @@ void setup(void)
   M5.Axp.ScreenBreath(34);
   canvas.createSprite(lcd.width(), lcd.height());
   canvas.setColorDepth(8);
-  canvas.setTextColor(WHITE); 
+  canvas.setTextColor(WHITE);
   canvas.setFont(&fonts::lgfxJapanGothic_28);
   canvas.setCursor(lcd.width()/2, 0);
 
@@ -238,6 +264,8 @@ void setup(void)
   //wifiに接続
   wifiMulti.addAP(ssid, pass);
   while(wifiMulti.run() != WL_CONNECTED) {
+    canvas.drawCentreString("WiFiに接続中", lcd.width()/2, lcd.height()/2);
+    canvas.pushSprite(&lcd, 0, 0);
   }
   
   Wire.begin(SDA_PIN, SCL_PIN);
@@ -285,7 +313,7 @@ void setup(void)
 void loop(void)
 {
   //M5の中央ボタンを押したらtrueになる
-  if ( M5.BtnA.wasPressed() ) {
+  if (M5.BtnA.wasPressed() ) {
     doGetData = M5.BtnA.wasPressed();
   }else{
     M5.update();
@@ -299,9 +327,9 @@ void loop(void)
       canvas.drawCentreString("クンクン", lcd.width()/2, lcd.height()/2-16); 
     }else{
       canvas.fillRect(0, 0, lcd.width(), lcd.height(), lcd.color565(0, 147,  214));
-      canvas.drawCentreString("香りを", lcd.width()/2, lcd.height()/2-32); 
-      canvas.drawCentreString("嗅いでる", lcd.width()/2, lcd.height()/2); 
-      canvas.drawCentreString("ゾウ！", lcd.width()/2, lcd.height()/2+32); 
+      canvas.drawCentreString("香りを", lcd.width()/2, lcd.height()/2-32);
+      canvas.drawCentreString("嗅いでる", lcd.width()/2, lcd.height()/2);
+      canvas.drawCentreString("ゾウ！", lcd.width()/2, lcd.height()/2+32);
     }
     canvas.drawString("0", 5, lcd.height()/2+64,2); 
     canvas.drawString("100(%)",lcd.width()-45, lcd.height()/2+64,2); 
